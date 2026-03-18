@@ -1,44 +1,4 @@
-🚀 Servidor Jarvis arrancando con su nueva personalidad...
 Traceback (most recent call last):
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/_bot.py", line 854, in initialize
-    await self.get_me()
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_extbot.py", line 1999, in get_me
-    return await super().get_me(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/_bot.py", line 985, in get_me
-    result = await self._post(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/_bot.py", line 703, in _post
-    return await self._do_post(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_extbot.py", line 372, in _do_post
-    return await super()._do_post(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/_bot.py", line 732, in _do_post
-    result = await request.post(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/request/_baserequest.py", line 198, in post
-    result = await self._request_wrapper(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/request/_baserequest.py", line 375, in _request_wrapper
-    raise exception
-telegram.error.InvalidToken: Unauthorized
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/Users/v2estudio/aleix_jarvis/bot.py", line 88, in <module>
-    app.run_polling()
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_application.py", line 839, in run_polling
-    return self.__run(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_application.py", line 1054, in __run
-    loop.run_until_complete(self._bootstrap_initialize(max_retries=bootstrap_retries))
-  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/asyncio/base_events.py", line 642, in run_until_complete
-    return future.result()
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_application.py", line 1014, in _bootstrap_initialize
-    await network_retry_loop(
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_utils/networkloop.py", line 134, in network_retry_loop
-    await do_action()
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_utils/networkloop.py", line 109, in do_action
-    await action_cb()
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_application.py", line 489, in initialize
-    await self.bot.initialize()
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/ext/_extbot.py", line 318, in initialize
-    await super().initialize()
-  File "/Users/v2estudio/aleix_jarvis/venv/lib/python3.9/site-packages/telegram/_bot.py", line 856, in initialize
-    raise InvalidToken(f"The token `{self._token}` was rejected by the server.") from exc
-telegram.error.InvalidToken: The token `8051234567:AAHksQhJI0WcnqaNkdnQocs95LgTJKIl6zw` was rejected by the server.
+  File "/Users/v2estudio/aleix_jarvis/bot.py", line 5, in <module>
+    import ollama
+ModuleNotFoundError: No module named 'ollama'

@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+import json
 import ollama
 import subprocess
 import sqlite3
@@ -91,6 +92,30 @@ def web_search(query):
         logging.error(f"Error en búsqueda web: {e}")
         return f"Ocurrió un error al buscar en la red: {e}"
 
+def enviar_whatsapp(contacto, mensaje):
+    logging.info(f"Iniciando envío de WhatsApp a {contacto}: {mensaje}")
+    apple_script = f"""
+    tell application "WhatsApp" to activate
+    delay 1
+    tell application "System Events"
+        keystroke "f" using command down -- Busca el contacto
+        delay 0.5
+        keystroke "{contacto}"
+        delay 1.5
+        keystroke return -- Entra en el chat
+        delay 0.5
+        keystroke "{mensaje}"
+        keystroke return -- Envía el mensaje
+    end tell
+    """
+    try:
+        subprocess.run(["osascript", "-e", apple_script], check=True)
+        logging.info("WhatsApp enviado mediante AppleScript")
+        return True
+    except Exception as e:
+        logging.error(f"Error al enviar WhatsApp mediante UI: {e}")
+        return False
+
 async def check_user(update: Update) -> bool:
     user_id = update.effective_user.id
     if user_id != YOUR_USER_ID:
@@ -148,6 +173,56 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     save_message('user', user_message)
     
+    # NLP Router: Comprobar intención de enviar WhatsApp
+    try:
+        intent_prompt = f"Analiza: '{user_message}'. ¿El usuario quiere enviar un mensaje de WhatsApp o mensaje de texto? Responde solo SI o NO."
+        intent_response = await asyncio.to_thread(
+            ollama.chat,
+            model=MODEL_NAME,
+            messages=[{'role': 'user', 'content': intent_prompt}]
+        )
+        
+        is_whatsapp = intent_response['message']['content'].strip().upper()
+        
+        if "SI" in is_whatsapp:
+            extract_prompt = f"Extrae el destinatario y el mensaje de: '{user_message}'. Responde en JSON: {{\"contacto\": \"nombre\", \"mensaje\": \"texto\"}}."
+            extract_response = await asyncio.to_thread(
+                ollama.chat,
+                model=MODEL_NAME,
+                messages=[{'role': 'user', 'content': extract_prompt}]
+            )
+            
+            try:
+                # Extraer JSON de la respuesta (puede venir con Markdown)
+                json_text = extract_response['message']['content']
+                if "```json" in json_text:
+                    json_text = json_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in json_text:
+                    json_text = json_text.split("```")[1].split("```")[0].strip()
+                    
+                data = json.loads(json_text)
+                contacto = data.get("contacto", "Desconocido")
+                mensaje = data.get("mensaje", "")
+                
+                await update.message.reply_text(f"Iniciando protocolo de mensajería para {contacto}...")
+                
+                # Ejecutar automatización UI
+                await asyncio.to_thread(enviar_whatsapp, contacto, mensaje)
+                
+                bot_response = f"Entendido, Aleix. He abierto WhatsApp y le he enviado el mensaje a {contacto}."
+                    
+                save_message('assistant', bot_response)
+                await update.message.reply_text(bot_response)
+                return
+            except json.JSONDecodeError as e:
+                logging.error(f"Error al decodificar JSON de WhatsApp: {e}")
+                logging.error(f"Respuesta cruda: {extract_response['message']['content']}")
+                await update.message.reply_text("He detectado su intención de enviar un mensaje, pero mi módulo de extracción de entidades falló al estructurar los datos.")
+                # Fallback al chat normal si falla el JSON
+    except Exception as e:
+        logging.error(f"Error en NLP Router de WhatsApp: {e}")
+        # Continuar con el chat normal si hay error en el router
+        
     history = get_context(limit=20)
     
     try:
