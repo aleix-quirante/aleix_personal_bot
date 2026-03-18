@@ -2,10 +2,10 @@ import os
 import logging
 import asyncio
 import json
-import ollama
-import subprocess
 import sqlite3
+import subprocess
 from dotenv import load_dotenv
+import ollama
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -13,10 +13,9 @@ from duckduckgo_search import DDGS
 
 load_dotenv()
 
-# --- CONFIGURACIÓN SEGURA ---
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-YOUR_USER_ID = int(os.getenv("USER_ID"))
-DB_PATH = os.getenv("DB_PATH", "jarvis_memory.db")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+USER_ID = int(os.getenv("USER_ID", "0"))
+DB_PATH = os.getenv("DB_PATH", "/Volumes/USB/jarvis_memory.db")
 MODEL_NAME = "llama3"
 
 logging.basicConfig(
@@ -25,7 +24,6 @@ logging.basicConfig(
     filename='bot.log'
 )
 
-# --- BASE DE DATOS Y MEMORIA ---
 SYSTEM_PROMPT = {
     'role': 'system', 
     'content': 'Eres Jarvis, el asistente personal de Aleix. Responde SIEMPRE en español. Tu tono es profesional, eficiente, muy culto y con el ingenio británico de Paul Bettany en Iron Man. Sabes que corres localmente en un Mac Mini M4.'
@@ -65,7 +63,7 @@ def save_message(role, content):
     except Exception as e:
         logging.error(f"Error al guardar mensaje en BD: {e}")
 
-def get_context(limit=20):
+def get_context(limit=15):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -80,17 +78,6 @@ def get_context(limit=20):
     except Exception as e:
         logging.error(f"Error al recuperar contexto de BD: {e}")
         return []
-
-def web_search(query):
-    try:
-        results = DDGS().text(query, max_results=3)
-        context = ""
-        for i, res in enumerate(results, 1):
-            context += f"[{i}] {res['title']}: {res['body']} (Fuente: {res['href']})\n\n"
-        return context if context else "No se encontraron resultados relevantes."
-    except Exception as e:
-        logging.error(f"Error en búsqueda web: {e}")
-        return f"Ocurrió un error al buscar en la red: {e}"
 
 def enviar_whatsapp(contacto, mensaje):
     logging.info(f"Iniciando envío de WhatsApp a {contacto}: {mensaje}")
@@ -118,14 +105,21 @@ def enviar_whatsapp(contacto, mensaje):
 
 async def check_user(update: Update) -> bool:
     user_id = update.effective_user.id
-    if user_id != YOUR_USER_ID:
+    if user_id != USER_ID:
         logging.warning(f"Intento de acceso de ID no autorizado: {user_id}")
         return False
     return True
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_user(update): return
-    await update.message.reply_text("A sus órdenes, Aleix. Mis sistemas están operativos y en línea en este Mac Mini M4. He inicializado mi memoria persistente. ¿En qué le puedo asistir?")
+def web_search(query):
+    try:
+        results = DDGS().text(query, max_results=3)
+        context = ""
+        for i, res in enumerate(results, 1):
+            context += f"[{i}] {res['title']}: {res['body']} (Fuente: {res['href']})\n\n"
+        return context if context else "No se encontraron resultados relevantes."
+    except Exception as e:
+        logging.error(f"Error en búsqueda web: {e}")
+        return f"Ocurrió un error al buscar en la red: {e}"
 
 async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user(update): return
@@ -155,7 +149,6 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         bot_response = response['message']['content']
         
-        # Opcionalmente, guardamos la búsqueda y respuesta en la memoria
         save_message('user', f"/buscar {query}")
         save_message('assistant', bot_response)
         
@@ -165,6 +158,10 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Error en comando buscar: {e}")
         await temp_message.edit_text("Mis disculpas, señor. Ha fallado mi enlace con la red global o mi procesamiento de los datos.")
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user(update): return
+    await update.message.reply_text("A sus órdenes, Aleix. Mis sistemas están operativos. Memoria inicializada en el Mac Mini M4. ¿En qué le puedo asistir?")
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_user(update): return
     
@@ -173,6 +170,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     save_message('user', user_message)
     
+    msg_lower = user_message.lower()
+    if any(keyword in msg_lower for keyword in ["foto", "pantalla", "captura"]):
+        await update.message.reply_text("Iniciando captura de pantalla de los sistemas principales, señor...")
+        filepath = "snap.png"
+        try:
+            subprocess.run(["screencapture", "-x", filepath], check=True)
+            with open(filepath, 'rb') as photo:
+                await update.message.reply_photo(photo=photo, caption="Captura del sistema completada con éxito.")
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return
+        except Exception as e:
+            logging.error(f"Error al tomar captura: {e}")
+            await update.message.reply_text(f"Mis disculpas, señor. Ha ocurrido un error al intentar capturar la pantalla: {e}")
+            return
+
     # NLP Router: Comprobar intención de enviar WhatsApp
     try:
         intent_prompt = f"Analiza: '{user_message}'. ¿El usuario quiere enviar un mensaje de WhatsApp o mensaje de texto? Responde solo SI o NO."
@@ -185,7 +198,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_whatsapp = intent_response['message']['content'].strip().upper()
         
         if "SI" in is_whatsapp:
-            extract_prompt = f"Extrae el destinatario y el mensaje de: '{user_message}'. Responde en JSON: {{\"contacto\": \"nombre\", \"mensaje\": \"texto\"}}."
+            extract_prompt = f"Extrae el destinatario y el mensaje de: '{user_message}'. Responde en JSON estricto: {{\"c\": \"nombre\", \"m\": \"mensaje\"}}."
             extract_response = await asyncio.to_thread(
                 ollama.chat,
                 model=MODEL_NAME,
@@ -193,43 +206,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             try:
-                # Extraer JSON de la respuesta (puede venir con Markdown)
                 json_text = extract_response['message']['content']
-                if "```json" in json_text:
-                    json_text = json_text.split("```json")[1].split("```")[0].strip()
-                elif "```" in json_text:
-                    json_text = json_text.split("```")[1].split("```")[0].strip()
+                # Clean string in Python to find first '{' and last '}'
+                start_idx = json_text.find('{')
+                end_idx = json_text.rfind('}')
+                if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+                    json_str = json_text[start_idx:end_idx+1]
+                    data = json.loads(json_str)
+                    contacto = data.get("c", "Desconocido")
+                    mensaje = data.get("m", "")
                     
-                data = json.loads(json_text)
-                contacto = data.get("contacto", "Desconocido")
-                mensaje = data.get("mensaje", "")
-                
-                await update.message.reply_text(f"Iniciando protocolo de mensajería para {contacto}...")
-                
-                # Ejecutar automatización UI
-                await asyncio.to_thread(enviar_whatsapp, contacto, mensaje)
-                
-                bot_response = f"Entendido, Aleix. He abierto WhatsApp y le he enviado el mensaje a {contacto}."
+                    await update.message.reply_text(f"Iniciando protocolo de mensajería para {contacto}...")
                     
-                save_message('assistant', bot_response)
-                await update.message.reply_text(bot_response)
-                return
-            except json.JSONDecodeError as e:
+                    # Ejecutar automatización UI
+                    await asyncio.to_thread(enviar_whatsapp, contacto, mensaje)
+                    
+                    bot_response = f"Entendido, Aleix. He abierto WhatsApp y le he enviado el mensaje a {contacto}."
+                        
+                    save_message('assistant', bot_response)
+                    await update.message.reply_text(bot_response)
+                    return
+                else:
+                    raise ValueError("No JSON object found in response")
+            except Exception as e:
                 logging.error(f"Error al decodificar JSON de WhatsApp: {e}")
-                logging.error(f"Respuesta cruda: {extract_response['message']['content']}")
-                await update.message.reply_text("He detectado su intención de enviar un mensaje, pero mi módulo de extracción de entidades falló al estructurar los datos.")
                 # Fallback al chat normal si falla el JSON
     except Exception as e:
         logging.error(f"Error en NLP Router de WhatsApp: {e}")
         # Continuar con el chat normal si hay error en el router
         
-    history = get_context(limit=20)
+    history = get_context(limit=15)
     
     try:
         # Construir mensajes con el prompt del sistema + historial
         messages = [SYSTEM_PROMPT] + history
         
-        # Ejecutamos la llamada a Ollama en un hilo separado para no bloquear el bot
         response = await asyncio.to_thread(
             ollama.chat,
             model=MODEL_NAME,
@@ -243,37 +254,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(bot_response)
     except Exception as e:
         logging.error(f"Error en Ollama: {e}")
-        await update.message.reply_text("Mis disculpas, señor. Parece que mi motor cognitivo principal ha sufrido un breve fallo. Sugiero revisar los registros del sistema.")
-
-async def foto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_user(update): return
-    
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    await update.message.reply_text("Iniciando captura de pantalla de los sistemas principales, señor...")
-    
-    filepath = "screenshot.png"
-    try:
-        # Comando para macOS
-        subprocess.run(["screencapture", "-x", filepath], check=True)
-        
-        # Enviar foto por Telegram
-        with open(filepath, 'rb') as photo:
-            await update.message.reply_photo(photo=photo, caption="Captura del sistema completada con éxito.")
-            
-        # Limpiar
-        if os.path.exists(filepath):
-            os.remove(filepath)
-            
-    except Exception as e:
-        logging.error(f"Error al tomar o enviar captura de pantalla: {e}")
-        await update.message.reply_text(f"Mis disculpas, señor. Ha ocurrido un error al intentar capturar la pantalla: {e}")
+        await update.message.reply_text("Mis disculpas, señor. Parece que mi motor cognitivo principal ha sufrido un breve fallo.")
 
 if __name__ == '__main__':
     init_db()
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("foto", foto_command))
     app.add_handler(CommandHandler("buscar", buscar_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("🚀 Servidor Jarvis arrancando con memoria conectada a SSD...")
+    print("🚀 Servidor Jarvis arrancando con memoria conectada a /Volumes/USB/jarvis_memory.db...")
     app.run_polling()
