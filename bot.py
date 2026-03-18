@@ -87,7 +87,7 @@ async def enviar_whatsapp(contacto, mensaje, update):
     script_locate = f"""
     try
         tell application "WhatsApp" to activate
-        delay 1.5
+        delay 1
         tell application "System Events"
             tell process "WhatsApp"
                 set frontmost to true
@@ -96,16 +96,16 @@ async def enviar_whatsapp(contacto, mensaje, update):
                 key code 53
                 delay 0.2
                 key code 53
-                delay 0.8
+                delay 0.5
                 keystroke "f" using command down
-                delay 1.2
+                delay 0.5
                 keystroke "a" using command down
                 key code 51 -- Borrar
                 keystroke "{contacto}"
-                delay 2.5
+                delay 1.5
                 key code 125 -- Flecha Abajo
-                delay 0.8
-                keystroke return
+                delay 1
+                key code 36 -- Enter físico
             end tell
         end tell
     on error errMsg number errNum
@@ -124,7 +124,7 @@ async def enviar_whatsapp(contacto, mensaje, update):
                     set frontmost to true
                     keystroke "{mensaje}"
                     delay 0.8
-                    keystroke return
+                    key code 36 -- Enter físico
                 end tell
             end tell
         on error errMsg number errNum
@@ -245,8 +245,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             try:
                 json_text = extract_response['message']['content']
-                # Buscamos JSON ultra robusto
-                match = re.search(r'\{[^{}]*\}', json_text)
+                # Buscamos JSON ultra robusto con DOTALL
+                match = re.search(r'\{.*\}', json_text, re.DOTALL)
                 if not match:
                     # Segundo intento
                     extract_prompt2 = f"Responde SOLAMENTE el objeto JSON sin nada más para: '{user_message}'. \nJSON: {{\"c\": \"nombre_real\", \"m\": \"texto\"}}"
@@ -256,7 +256,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         messages=[{'role': 'user', 'content': extract_prompt2}]
                     )
                     json_text = extract_response2['message']['content']
-                    match = re.search(r'\{[^{}]*\}', json_text)
+                    match = re.search(r'\{.*\}', json_text, re.DOTALL)
 
                 if match:
                     json_str = match.group(0)
