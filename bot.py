@@ -69,37 +69,37 @@ def get_context(limit=15):
 
 
 # --- AUTOMATIZACIÓN WHATSAPP (EL CORAZÓN) ---
-async def buscar_contacto_mac(nombre_buscar):
+def buscar_contacto_mac(nombre_buscar):
+    # Dividimos el nombre en palabras sueltas
+    palabras = nombre_buscar.strip().split()
+    if not palabras:
+        return None
+
+    # Construimos una condición flexible en AppleScript
+    # Ej: name contains "antonio" and name contains "quirante"
+    condiciones = " and ".join([f'name contains "{p}"' for p in palabras])
+
     applescript = f"""
     tell application "Contacts"
         try
-            set lasPersonas to every person whose name contains "{nombre_buscar}"
-            if (count of lasPersonas) is 0 then return "NO_ENCONTRADO"
-            
-            repeat with laPersona in lasPersonas
-                if (count of phones of laPersona) > 0 then
-                    return value of first phone of laPersona
-                end if
-            end repeat
-            return "NO_ENCONTRADO"
+            -- Búsqueda elástica: Ignora si hay segundos nombres o apellidos entre medias
+            set laPersona to first person whose {condiciones}
+            set elNumero to value of first phone of laPersona
+            return elNumero
         on error
             return "NO_ENCONTRADO"
         end try
     end tell
     """
     try:
-        resultado = await asyncio.create_subprocess_exec(
-            "osascript",
-            "-e",
-            applescript,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        resultado = subprocess.run(
+            ["osascript", "-e", applescript], capture_output=True, text=True
         )
-        stdout, stderr = await resultado.communicate()
-        numero_bruto = stdout.decode().strip()
+        numero_bruto = resultado.stdout.strip()
 
         if numero_bruto == "NO_ENCONTRADO" or not numero_bruto:
             return None
+
         return re.sub(r"\D", "", numero_bruto)
     except Exception as e:
         logging.error(f"Error buscando contacto: {e}")
@@ -118,7 +118,7 @@ async def enviar_whatsapp(contacto, mensaje, update):
         f"Jarvis: Buscando a {c_limpio.title()} en sus contactos..."
     )
 
-    numero = await buscar_contacto_mac(c_limpio)
+    numero = buscar_contacto_mac(c_limpio)
 
     if not numero:
         await update.message.reply_text(
@@ -210,12 +210,10 @@ Responde ÚNICAMENTE con la palabra SI o la palabra NO. No añadas nada más.
 Última orden a procesar: '{user_text}'
 
 REGLAS DE EXTRACCIÓN ESTRICTAS:
-1. Lee la 'Última orden a procesar'. Si menciona un nombre de persona explícitamente (ej. "envíale a Noemi Arans", "dile a María"), el destinatario ('c') es ese nombre EXACTO. Ignora el historial.
-2. SOLO si la 'Última orden' NO tiene nombre (ej. "dile también que...", "sigue enviándole"), usa el 'Historial reciente' para deducir quién era la última persona con la que se habló.
-3. Extrae el texto del mensaje a enviar ('m').
-4. Devuelve EXCLUSIVAMENTE un objeto JSON válido.
-
-Formato obligatorio: {{"c": "Nombre del contacto", "m": "Texto a enviar"}}
+1. Si la 'Última orden' menciona un nombre explícito, extrae EXACTAMENTE las letras que ha escrito el usuario. NO corrijas la ortografía ni uses la versión del historial. (Ej: si el usuario escribe "quirante", no pongas "quierante" aunque esté en el historial).
+2. SOLO si NO hay nombre en la 'Última orden', usa el historial.
+3. Extrae el mensaje.
+4. Devuelve JSON: {{"c": "Nombre", "m": "Mensaje"}}
 """
 
         try:
