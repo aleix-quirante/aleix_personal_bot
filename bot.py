@@ -137,26 +137,16 @@ async def enviar_whatsapp(contacto, mensaje, update):
         # Pausa para asegurar que la app carga y el cursor está listo
         await asyncio.sleep(3.5)
 
-        # APPLESCRIPT A PRUEBA DE FALLOS:
-        # Pasamos cada línea de AppleScript como un argumento -e separado
-        # para evitar errores de tabulación o saltos de línea desde Python.
+        # APPLESCRIPT SIMPLIFICADO AL MÁXIMO
         subprocess.run(
             [
                 "osascript",
                 "-e",
-                'tell application "System Events"',
+                'tell application "WhatsApp" to activate',
                 "-e",
-                'tell process "WhatsApp"',
+                "delay 0.8",
                 "-e",
-                "set frontmost to true",
-                "-e",
-                "delay 0.5",
-                "-e",
-                "key code 36",
-                "-e",
-                "end tell",
-                "-e",
-                "end tell",
+                'tell application "System Events" to key code 36',
             ],
             check=True,
         )
