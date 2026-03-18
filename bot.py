@@ -84,28 +84,26 @@ async def enviar_whatsapp(contacto, mensaje, update):
     logging.info(f"Iniciando envío de WhatsApp a {contacto}: {mensaje}")
     await update.message.reply_text(f"Jarvis: Localizando a {contacto} en el sistema...")
     
-    script_locate = f"""
+    script_whatsapp = f"""
     try
         tell application "WhatsApp" to activate
         delay 1
         tell application "System Events"
             tell process "WhatsApp"
                 set frontmost to true
-                key code 53 -- Escape
-                delay 0.2
-                key code 53
-                delay 0.2
-                key code 53
-                delay 0.5
                 keystroke "f" using command down
                 delay 0.5
                 keystroke "a" using command down
                 key code 51 -- Borrar
                 keystroke "{contacto}"
-                delay 1.5
+                delay 2
                 key code 125 -- Flecha Abajo
+                delay 0.5
+                key code 36 -- Enter real
                 delay 1
-                key code 36 -- Enter físico
+                keystroke "{mensaje}"
+                delay 0.5
+                key code 36 -- Enter para enviar
             end tell
         end tell
     on error errMsg number errNum
@@ -113,26 +111,7 @@ async def enviar_whatsapp(contacto, mensaje, update):
     end try
     """
     try:
-        await asyncio.to_thread(subprocess.run, ["osascript", "-e", script_locate], check=True, capture_output=True, text=True)
-        
-        await update.message.reply_text("Jarvis: Escribiendo mensaje...")
-        
-        script_send = f"""
-        try
-            tell application "System Events"
-                tell process "WhatsApp"
-                    set frontmost to true
-                    keystroke "{mensaje}"
-                    delay 0.8
-                    key code 36 -- Enter físico
-                end tell
-            end tell
-        on error errMsg number errNum
-            error "Error de AppleScript (" & errNum & "): " & errMsg
-        end try
-        """
-        await asyncio.to_thread(subprocess.run, ["osascript", "-e", script_send], check=True, capture_output=True, text=True)
-        
+        await asyncio.to_thread(subprocess.run, ["osascript", "-e", script_whatsapp], check=True, capture_output=True, text=True)
         await update.message.reply_text("Jarvis: Protocolo finalizado.")
         return True
     except subprocess.CalledProcessError as e:
