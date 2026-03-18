@@ -5,6 +5,7 @@ import asyncio
 import json
 import sqlite3
 import subprocess
+from datetime import datetime
 from dotenv import load_dotenv
 import ollama
 from telegram import Update
@@ -14,295 +15,127 @@ from duckduckgo_search import DDGS
 
 load_dotenv()
 
+# --- CONFIGURACIÓN ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 USER_ID = int(os.getenv("USER_ID", "0"))
-DB_PATH = os.getenv("DB_PATH", "/Volumes/USB/jarvis_memory.db")
+DB_PATH = "/Volumes/USB/jarvis_memory.db" # Ruta directa al SSD
 MODEL_NAME = "llama3"
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    filename='bot.log'
-)
+logging.basicConfig(level=logging.INFO, filename='bot.log')
 
 SYSTEM_PROMPT = {
     'role': 'system', 
-    'content': 'Eres Jarvis, el asistente personal de Aleix. Responde SIEMPRE en español. Tu tono es profesional, eficiente, muy culto y con el ingenio británico de Paul Bettany en Iron Man. Sabes que corres localmente en un Mac Mini M4.'
+    'content': 'Eres Jarvis, el asistente de Aleix. Eres culto y eficiente. Sabes que corres en un Mac Mini M4. IMPORTANTE: Tu nombre es Jarvis, si Aleix te pide enviar un mensaje a alguien, el destinatario NUNCA eres tú.'
 }
 
+# --- MEMORIA ---
 def init_db():
-    db_dir = os.path.dirname(DB_PATH)
-    if db_dir and not os.path.exists(db_dir):
-        try:
-            os.makedirs(db_dir, exist_ok=True)
-        except Exception as e:
-            logging.error(f"No se pudo crear el directorio de la BD: {e}")
-            
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY,
-                role TEXT,
-                content TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logging.error(f"Error inicializando BD: {e}")
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, role TEXT, content TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)')
+    conn.close()
 
 def save_message(role, content):
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO messages (role, content) VALUES (?, ?)', (role, content))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logging.error(f"Error al guardar mensaje en BD: {e}")
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('INSERT INTO messages (role, content) VALUES (?, ?)', (role, content))
+    conn.commit()
+    conn.close()
 
 def get_context(limit=15):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT role, content FROM (
-                SELECT role, content, id FROM messages ORDER BY id DESC LIMIT ?
-            ) ORDER BY id ASC
-        ''', (limit,))
+        cursor.execute('SELECT role, content FROM (SELECT * FROM messages ORDER BY id DESC LIMIT ?) ORDER BY id ASC', (limit,))
         rows = cursor.fetchall()
         conn.close()
-        return [{'role': row[0], 'content': row[1]} for row in rows]
-    except Exception as e:
-        logging.error(f"Error al recuperar contexto de BD: {e}")
-        return []
+        return [{'role': r, 'content': c} for r, c in rows]
+    except: return []
 
+# --- AUTOMATIZACIÓN WHATSAPP (EL CORAZÓN) ---
 async def enviar_whatsapp(contacto, mensaje, update):
-    logging.info(f"Iniciando envío de WhatsApp a {contacto}: {mensaje}")
-    await update.message.reply_text(f"Jarvis: Localizando a {contacto} en el sistema...")
+    await update.message.reply_text(f"Jarvis: Localizando a {contacto}...")
     
+    # Limpiamos el nombre por si la IA se ha liado
+    contacto_limpio = contacto.replace("Jarvis", "").replace("al ", "").replace("a ", "").strip()
+
     script_whatsapp = f"""
-    try
-        tell application "WhatsApp" to activate
-        delay 1
-        tell application "System Events"
-            tell process "WhatsApp"
-                set frontmost to true
-                key code 53 -- Esc
-                delay 0.5
-                keystroke "f" using command down
-                delay 0.5
-                keystroke "a" using command down -- Seleccionar todo lo anterior
-                key code 51 -- Borrar
-                keystroke "{contacto}"
-                delay 2.5 -- Tiempo para que aparezcan los resultados
-                
-                key code 125 -- FLECHA ABAJO: Crucial para evitar el pitido
-                delay 0.5
-                key code 36 -- ENTER para entrar al chat
-                delay 1.5
-                keystroke "{mensaje}"
-                delay 0.5
-                key code 36 -- ENTER para enviar
-            end tell
+    tell application "WhatsApp" to activate
+    delay 1
+    tell application "System Events"
+        tell process "WhatsApp"
+            set frontmost to true
+            key code 53 -- Esc para asegurar que no hay nada abierto
+            delay 0.5
+            keystroke "f" using command down -- Abrir buscador
+            delay 0.5
+            keystroke "a" using command down -- Seleccionar todo
+            key code 51 -- Borrar
+            delay 0.5
+            keystroke "{contacto_limpio}"
+            delay 3.0 -- TIEMPO PARA QUE WHATSAPP BUSQUE REALMENTE
+            
+            key code 125 -- FLECHA ABAJO: Crucial para salir del cuadro de texto
+            delay 0.5
+            key code 36 -- ENTER: Entrar al chat
+            delay 1.5
+            
+            keystroke "{mensaje}"
+            delay 0.5
+            key code 36 -- ENTER: Enviar mensaje
         end tell
-    on error errMsg number errNum
-        error "Error de AppleScript (" & errNum & "): " & errMsg
-    end try
+    end tell
     """
     try:
-        await asyncio.to_thread(subprocess.run, ["osascript", "-e", script_whatsapp], check=True, capture_output=True, text=True)
-        await update.message.reply_text("Jarvis: Protocolo finalizado.")
+        # Usamos el binario con permisos (el que funcionó con la 'X')
+        subprocess.run(["osascript", "-e", script_whatsapp], check=True)
+        await update.message.reply_text(f"✅ Mensaje enviado a {contacto_limpio}, señor.")
         return True
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else str(e)
-        logging.error(f"Error al enviar WhatsApp mediante UI: {error_msg}")
-        await update.message.reply_text(f"Jarvis: Error de sistema detectado. Detalle técnico: {error_msg}")
+    except:
+        await update.message.reply_text("❌ Error en la interfaz de WhatsApp.")
         return False
 
-async def check_user(update: Update) -> bool:
-    user_id = update.effective_user.id
-    if user_id != USER_ID:
-        logging.warning(f"Intento de acceso de ID no autorizado: {user_id}")
-        return False
-    return True
-
-def web_search(query):
-    try:
-        results = DDGS().text(query, max_results=3)
-        context = ""
-        for i, res in enumerate(results, 1):
-            context += f"[{i}] {res['title']}: {res['body']} (Fuente: {res['href']})\n\n"
-        return context if context else "No se encontraron resultados relevantes."
-    except Exception as e:
-        logging.error(f"Error en búsqueda web: {e}")
-        return f"Ocurrió un error al buscar en la red: {e}"
-
-async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_user(update): return
-    
-    if not context.args:
-        await update.message.reply_text("Por favor, señor, indíqueme qué desea que busque. Ejemplo: /buscar clima en Madrid")
-        return
-        
-    query = " ".join(context.args)
-    temp_message = await update.message.reply_text(f"🔍 Conectando a la red global para buscar: {query}...")
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    
-    try:
-        search_results = await asyncio.to_thread(web_search, query)
-        
-        prompt = f"Aquí tienes información actualizada de internet sobre '{query}':\n\n{search_results}\n\nBasándote estrictamente en esta información, responde de forma concisa al usuario."
-        messages = [
-            SYSTEM_PROMPT,
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        response = await asyncio.to_thread(
-            ollama.chat,
-            model=MODEL_NAME,
-            messages=messages
-        )
-        
-        bot_response = response['message']['content']
-        
-        save_message('user', f"/buscar {query}")
-        save_message('assistant', bot_response)
-        
-        await temp_message.edit_text(bot_response)
-        
-    except Exception as e:
-        logging.error(f"Error en comando buscar: {e}")
-        await temp_message.edit_text("Mis disculpas, señor. Ha fallado mi enlace con la red global o mi procesamiento de los datos.")
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_user(update): return
-    await update.message.reply_text("A sus órdenes, Aleix. Mis sistemas están operativos. Memoria inicializada en el Mac Mini M4. ¿En qué le puedo asistir?")
-
+# --- PROCESAMIENTO ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_user(update): return
+    if update.effective_user.id != USER_ID: return
     
+    user_text = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+
+    # 1. ¿Es WhatsApp?
+    intent_prompt = f"Analiza: '{user_text}'. ¿Quiere enviar un mensaje a alguien? Responde solo SI o NO."
+    intent_res = await asyncio.to_thread(ollama.chat, model=MODEL_NAME, messages=[{'role': 'user', 'content': intent_prompt}])
     
-    user_message = update.message.text
-    save_message('user', user_message)
-    
-    msg_lower = user_message.lower()
-    if any(keyword in msg_lower for keyword in ["foto", "pantalla", "captura"]):
-        await update.message.reply_text("Iniciando captura de pantalla de los sistemas principales, señor...")
-        filepath = "snap.png"
+    if "SI" in intent_res['message']['content'].upper():
+        extract_prompt = f"Extrae el nombre y el mensaje de: '{user_text}'. NUNCA uses 'Jarvis' como nombre. Responde solo JSON: {{\"c\": \"nombre\", \"m\": \"texto\"}}"
+        extract_res = await asyncio.to_thread(ollama.chat, model=MODEL_NAME, messages=[{'role': 'user', 'content': extract_prompt}])
+        
         try:
-            subprocess.run(["screencapture", "-x", filepath], check=True)
-            with open(filepath, 'rb') as photo:
-                await update.message.reply_photo(photo=photo, caption="Captura del sistema completada con éxito.")
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            return
-        except Exception as e:
-            logging.error(f"Error al tomar captura: {e}")
-            await update.message.reply_text(f"Mis disculpas, señor. Ha ocurrido un error al intentar capturar la pantalla: {e}")
-            return
+            # Limpieza de JSON ultra-robusta
+            res_text = extract_res['message']['content']
+            match = re.search(r'\{.*\}', res_text, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+                await enviar_whatsapp(data['c'], data['m'], update)
+                return
+        except: pass
 
-    # NLP Router: Comprobar intención de enviar WhatsApp
-    try:
-        intent_prompt = f"Analiza: '{user_message}'. ¿El usuario está pidiendo enviar un mensaje, decir algo o comunicar algo a una persona? Si el usuario menciona a una persona y algo que quiere decirle, responde SI siempre. Responde solo SI o NO."
-        intent_response = await asyncio.to_thread(
-            ollama.chat,
-            model=MODEL_NAME,
-            messages=[{'role': 'user', 'content': intent_prompt}]
-        )
-        
-        is_whatsapp = intent_response['message']['content'].strip().upper()
-        
-        if "SI" in is_whatsapp:
-            extract_prompt = f"Extrae el destinatario y el mensaje de: '{user_message}'. \nREGLA DE ORO: 'Jarvis' es el nombre del ASISTENTE. NUNCA extraigas 'Jarvis' como contacto a menos que el usuario diga explícitamente 'envía un mensaje a mi contacto llamado Jarvis'. \nResponde solo JSON: {{\"c\": \"nombre_real\", \"m\": \"texto\"}}."
-            extract_response = await asyncio.to_thread(
-                ollama.chat,
-                model=MODEL_NAME,
-                messages=[{'role': 'user', 'content': extract_prompt}]
-            )
-            
-            try:
-                json_text = extract_response['message']['content']
-                # Buscamos JSON ultra robusto con DOTALL
-                match = re.search(r'\{.*\}', json_text, re.DOTALL)
-                if not match:
-                    # Segundo intento
-                    extract_prompt2 = f"Responde SOLAMENTE el objeto JSON sin nada más para: '{user_message}'. \nJSON: {{\"c\": \"nombre_real\", \"m\": \"texto\"}}"
-                    extract_response2 = await asyncio.to_thread(
-                        ollama.chat,
-                        model=MODEL_NAME,
-                        messages=[{'role': 'user', 'content': extract_prompt2}]
-                    )
-                    json_text = extract_response2['message']['content']
-                    match = re.search(r'\{.*\}', json_text, re.DOTALL)
+    # 2. Captura de pantalla
+    if any(k in user_text.lower() for k in ["foto", "pantalla", "captura"]):
+        subprocess.run(["screencapture", "-x", "snap.png"])
+        await update.message.reply_photo(photo=open("snap.png", 'rb'), caption="Sistemas visuales activos.")
+        return
 
-                if match:
-                    json_str = match.group(0)
-                    data = json.loads(json_str)
-                    contacto = data.get("c", "Desconocido")
-                    mensaje = data.get("m", "")
-                    
-                    # Filtro de contactos: si contiene Jarvis, forzar limpieza
-                    if "jarvis" in contacto.lower():
-                        # Tratar de encontrar el nombre real en el mensaje original si podemos
-                        palabras_limpias = [w for w in contacto.lower().split() if w not in ["jarvis", "a", "al", "a la", "para"]]
-                        if palabras_limpias:
-                            contacto = " ".join(palabras_limpias).title()
-                        else:
-                            contacto = "Desconocido"
-                            
-                    for palabra in ["Jarvis", "a la", "al", "a"]:
-                        if contacto.lower().startswith(palabra.lower() + " "):
-                            contacto = contacto[len(palabra)+1:].strip()
-                            
-                    if contacto.lower() == 'jarvis':
-                        contacto = "Desconocido"
-                    
-                    # Ejecutar automatización UI con logs
-                    success = await enviar_whatsapp(contacto, mensaje, update)
-                        
-                    if success:
-                        save_message('assistant', f"Mensaje enviado a {contacto}: {mensaje}")
-                    return
-                else:
-                    raise ValueError("No JSON object found in response after retry")
-            except Exception as e:
-                logging.error(f"Error al decodificar JSON de WhatsApp: {e}")
-                # Fallback al chat normal si falla el JSON
-    except Exception as e:
-        logging.error(f"Error en NLP Router de WhatsApp: {e}")
-        # Continuar con el chat normal si hay error en el router
-        
-    history = get_context(limit=15)
-    
-    try:
-        # Construir mensajes con el prompt del sistema + historial
-        messages = [SYSTEM_PROMPT] + history
-        
-        response = await asyncio.to_thread(
-            ollama.chat,
-            model=MODEL_NAME,
-            messages=messages
-        )
-        
-        bot_response = response['message']['content']
-        
-        save_message('assistant', bot_response)
-        
-        await update.message.reply_text(bot_response)
-    except Exception as e:
-        logging.error(f"Error en Ollama: {e}")
-        await update.message.reply_text("Mis disculpas, señor. Parece que mi motor cognitivo principal ha sufrido un breve fallo.")
+    # 3. Charla normal
+    save_message('user', user_text)
+    history = get_context()
+    response = await asyncio.to_thread(ollama.chat, model=MODEL_NAME, messages=[SYSTEM_PROMPT] + history)
+    reply = response['message']['content']
+    save_message('assistant', reply)
+    await update.message.reply_text(reply)
 
 if __name__ == '__main__':
     init_db()
+    print("🚀 Jarvis en línea. Mac Mini M4 bajo control.")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("buscar", buscar_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("🚀 Servidor Jarvis arrancando con memoria conectada a /Volumes/USB/jarvis_memory.db...")
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.run_polling()
