@@ -188,8 +188,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     )
 
-    # 1. ¿Quiere enviar un mensaje? (Ahora con contexto inyectado)
-    intent_prompt = f"Historial reciente:\n{historial_texto}\n\nTeniendo en cuenta este historial, ¿el último mensaje del usuario es una orden para enviar un mensaje a alguien? Responde ÚNICAMENTE con la palabra SI o NO."
+    # 1. ¿Quiere enviar un mensaje?
+    intent_prompt = f"""Historial reciente:
+{historial_texto}
+
+Última orden del usuario: '{user_text}'
+
+¿La última orden del usuario te pide que envíes un mensaje a alguien? (Ten en cuenta que "dile", "envíale" o "escríbele" significa enviar mensaje). 
+Responde ÚNICAMENTE con la palabra SI o la palabra NO. No añadas nada más.
+"""
     intent_res = await asyncio.to_thread(
         ollama.chat,
         model=MODEL_NAME,
@@ -197,8 +204,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if "SI" in intent_res["message"]["content"].upper():
-        # Le damos el historial para que pueda inferir pronombres (ej. "dile", "envíale")
-        extract_prompt = f'Historial reciente:\n{historial_texto}\n\nAnaliza la última orden del usuario usando el historial para deducir de quién está hablando si omite el nombre. Extrae el destinatario y el mensaje a enviar. Devuelve EXCLUSIVAMENTE un objeto JSON con las claves \'c\' (contacto) y \'m\' (mensaje). Ejemplo: {{"c": "Nombre deducido", "m": "texto a enviar"}}. No incluyas NINGÚN otro texto.'
+        extract_prompt = f"""Historial reciente:
+{historial_texto}
+
+Última orden a procesar: '{user_text}'
+
+REGLAS DE EXTRACCIÓN ESTRICTAS:
+1. Lee la 'Última orden a procesar'. Si menciona un nombre de persona explícitamente (ej. "envíale a Noemi Arans", "dile a María"), el destinatario ('c') es ese nombre EXACTO. Ignora el historial.
+2. SOLO si la 'Última orden' NO tiene nombre (ej. "dile también que...", "sigue enviándole"), usa el 'Historial reciente' para deducir quién era la última persona con la que se habló.
+3. Extrae el texto del mensaje a enviar ('m').
+4. Devuelve EXCLUSIVAMENTE un objeto JSON válido.
+
+Formato obligatorio: {{"c": "Nombre del contacto", "m": "Texto a enviar"}}
+"""
 
         try:
             extract_res = await asyncio.to_thread(
