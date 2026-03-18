@@ -131,25 +131,28 @@ async def enviar_whatsapp(contacto, mensaje, update):
     url_whatsapp = f"whatsapp://send?phone={numero}&text={mensaje_codificado}"
 
     try:
-        # Abrir WhatsApp (non-blocking)
-        await asyncio.create_subprocess_exec("open", url_whatsapp)
-        await asyncio.sleep(2)
+        # Abrir WhatsApp directo en el chat
+        subprocess.run(["open", url_whatsapp], check=True)
 
+        # AUMENTAMOS LA PAUSA: Le damos 3.5 segundos para asegurar que el Mac
+        # procesa la URL, abre la app, carga el chat y pega el texto en la caja.
+        await asyncio.sleep(3.5)
+
+        # APPLESCRIPT MEJORADO: Forzamos la activación de WhatsApp primero y lanzamos el Enter
         script_enter = """
+        tell application "WhatsApp" to activate
+        delay 0.5
         tell application "System Events"
-            tell process "WhatsApp"
-                set frontmost to true
-                key code 36
-            end tell
+            key code 36 -- Tecla Enter
         end tell
         """
-        # Ejecutar AppleScript (non-blocking)
-        await asyncio.create_subprocess_exec("osascript", "-e", script_enter)
+        subprocess.run(["osascript", "-e", script_enter], check=True)
 
         await update.message.reply_text(
             f"✅ Protocolo completado. Mensaje entregado a {c_limpio.title()}."
         )
         return True
+
     except Exception as e:
         await update.message.reply_text(
             f"❌ Error crítico en los servos de WhatsApp: {e}"
