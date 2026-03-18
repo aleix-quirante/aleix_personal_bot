@@ -166,6 +166,9 @@ async def enviar_whatsapp(contacto, mensaje, update):
 # --- PROCESAMIENTO ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != USER_ID:
+        logging.warning(
+            f"Intento de acceso no autorizado del ID: {update.effective_user.id}"
+        )
         return
 
     user_text = update.message.text
@@ -173,8 +176,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id, action=ChatAction.TYPING
     )
 
-    # 1. ¿Es WhatsApp?
-    intent_prompt = f"Clasifica esta orden: '{user_text}'. ¿El usuario te está pidiendo que envíes un mensaje a alguien? Responde ÚNICAMENTE con la palabra SI o la palabra NO. No digas nada más."
+    # ¡NUEVO!: Guardar el mensaje del usuario en memoria INMEDIATAMENTE
+    save_message("user", user_text)
+
+    # Recuperar el contexto de la base de datos y formatearlo para la IA
+    history = get_context(limit=6)
+    historial_texto = "\n".join(
+        [
+            f"{'Usuario' if m['role']=='user' else 'Jarvis'}: {m['content']}"
+            for m in history
+        ]
+    )
+
+    # 1. ¿Quiere enviar un mensaje? (Ahora con contexto inyectado)
+    intent_prompt = f"Historial reciente:\n{historial_texto}\n\nTeniendo en cuenta este historial, ¿el último mensaje del usuario es una orden para enviar un mensaje a alguien? Responde ÚNICAMENTE con la palabra SI o NO."
     intent_res = await asyncio.to_thread(
         ollama.chat,
         model=MODEL_NAME,
@@ -182,10 +197,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if "SI" in intent_res["message"]["content"].upper():
-        extract_prompt = f'Analiza esta petición: \'{user_text}\'. Extrae el destinatario y el texto a enviar. Devuelve EXCLUSIVAMENTE un objeto JSON con las claves \'c\' (contacto) y \'m\' (mensaje). Ejemplo: {{"c": "Pedro", "m": "llego tarde"}}. No incluyas ningún otro texto.'
+        # Le damos el historial para que pueda inferir pronombres (ej. "dile", "envíale")
+        extract_prompt = f'Historial reciente:\n{historial_texto}\n\nAnaliza la última orden del usuario usando el historial para deducir de quién está hablando si omite el nombre. Extrae el destinatario y el mensaje a enviar. Devuelve EXCLUSIVAMENTE un objeto JSON con las claves \'c\' (contacto) y \'m\' (mensaje). Ejemplo: {{"c": "Nombre deducido", "m": "texto a enviar"}}. No incluyas NINGÚN otro texto.'
 
         try:
-            # Usamos format='json' para forzar a Llama 3 a responder en JSON puro
             extract_res = await asyncio.to_thread(
                 ollama.chat,
                 model=MODEL_NAME,
@@ -196,32 +211,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             res_text = extract_res["message"]["content"]
             data = json.loads(res_text)
 
-            # Ejecuta la función de WhatsApp y si termina bien, corta la ejecución aquí.
+            # Ejecutamos la acción de WhatsApp
             await enviar_whatsapp(data["c"], data["m"], update)
+
+            # ¡NUEVO!: Guardar en la memoria que Jarvis ha enviado el mensaje
+            save_message(
+                "assistant",
+                f"Acción completada: Mensaje enviado a {data['c']}. Contenido: {data['m']}",
+            )
             return
 
         except Exception as e:
-            logging.error(
-                f"Error procesando JSON: {e} - Respuesta IA: {extract_res['message']['content'] if 'extract_res' in locals() else 'Fallo previo'}"
-            )
+            logging.error(f"Error procesando JSON: {e}")
             await update.message.reply_text(
-                "❌ Jarvis: Mis sistemas de procesamiento de lenguaje han fallado al intentar extraer el nombre y el mensaje. Por favor, inténtelo de nuevo."
+                "❌ Jarvis: Mis procesadores lógicos no pudieron entender el contexto o el destinatario. ¿Podría ser más específico?"
             )
-            return  # Evitamos caer al bloque de charla normal
+            save_message(
+                "assistant",
+                "Fallo al procesar el envío de mensaje por falta de contexto.",
+            )
+            return
 
     # 2. Captura de pantalla
     if any(k in user_text.lower() for k in ["foto", "pantalla", "captura"]):
-        await asyncio.create_subprocess_exec("screencapture", "-x", "snap.png")
-        # Give it a tiny moment to save the file
-        await asyncio.sleep(0.5)
+        subprocess.run(["screencapture", "-x", "snap.png"])
         await update.message.reply_photo(
             photo=open("snap.png", "rb"), caption="Sistemas visuales activos."
         )
+        save_message("assistant", "He enviado una captura de pantalla al usuario.")
         return
 
-    # 3. Charla normal
-    save_message("user", user_text)
-    history = get_context()
+    # 3. Charla normal (Ya no necesitamos guardar al usuario aquí porque se guardó al principio)
     response = await asyncio.to_thread(
         ollama.chat, model=MODEL_NAME, messages=[SYSTEM_PROMPT] + history
     )
