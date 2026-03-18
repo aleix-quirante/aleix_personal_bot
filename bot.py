@@ -53,10 +53,11 @@ def get_context(limit=15):
 
 # --- AUTOMATIZACIÓN WHATSAPP (EL CORAZÓN) ---
 async def enviar_whatsapp(contacto, mensaje, update):
+    logging.info(f"Iniciando envío de WhatsApp a {contacto}: {mensaje}")
     await update.message.reply_text(f"Jarvis: Localizando a {contacto}...")
     
-    # Limpiamos el nombre por si la IA se ha liado
-    contacto_limpio = contacto.replace("Jarvis", "").replace("al ", "").replace("a ", "").strip()
+    # Limpieza extrema del nombre
+    c_limpio = contacto.lower().replace("jarvis", "").replace("al ", "").replace("a ", "").strip().title()
 
     script_whatsapp = f"""
     tell application "WhatsApp" to activate
@@ -64,34 +65,35 @@ async def enviar_whatsapp(contacto, mensaje, update):
     tell application "System Events"
         tell process "WhatsApp"
             set frontmost to true
-            key code 53 -- Esc para asegurar que no hay nada abierto
+            key code 53 -- Esc
             delay 0.5
-            keystroke "f" using command down -- Abrir buscador
+            keystroke "f" using command down -- Buscar
             delay 0.5
-            keystroke "a" using command down -- Seleccionar todo
-            key code 51 -- Borrar
-            delay 0.5
-            keystroke "{contacto_limpio}"
-            delay 3.0 -- TIEMPO PARA QUE WHATSAPP BUSQUE REALMENTE
+            keystroke "a" using command down -- Borrar anterior
+            key code 51
+            keystroke "{c_limpio}"
+            delay 3.0 -- TIEMPO CRUCIAL
             
-            key code 125 -- FLECHA ABAJO: Crucial para salir del cuadro de texto
+            -- ESTA ES LA PARTE QUE EVITA EL PITIDO
+            key code 48 -- TAB (Para saltar del buscador a la lista)
             delay 0.5
-            key code 36 -- ENTER: Entrar al chat
+            key code 125 -- Flecha Abajo (Por seguridad)
+            delay 0.5
+            key code 36 -- Enter (Entrar al chat)
             delay 1.5
             
             keystroke "{mensaje}"
-            delay 0.5
-            key code 36 -- ENTER: Enviar mensaje
+            delay 0.8
+            key code 36 -- Enter (Enviar)
         end tell
     end tell
     """
     try:
-        # Usamos el binario con permisos (el que funcionó con la 'X')
         subprocess.run(["osascript", "-e", script_whatsapp], check=True)
-        await update.message.reply_text(f"✅ Mensaje enviado a {contacto_limpio}, señor.")
+        await update.message.reply_text(f"✅ Protocolo completado. Mensaje enviado a {c_limpio}.")
         return True
-    except:
-        await update.message.reply_text("❌ Error en la interfaz de WhatsApp.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error en los servos de WhatsApp: {e}")
         return False
 
 # --- PROCESAMIENTO ---
