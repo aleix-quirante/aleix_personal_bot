@@ -80,37 +80,57 @@ def get_context(limit=15):
         logging.error(f"Error al recuperar contexto de BD: {e}")
         return []
 
-def enviar_whatsapp(contacto, mensaje):
+async def enviar_whatsapp(contacto, mensaje, update):
     logging.info(f"Iniciando envío de WhatsApp a {contacto}: {mensaje}")
-    apple_script = f"""
+    await update.message.reply_text(f"Jarvis: Localizando a {contacto} en el sistema...")
+    
+    script_locate = f"""
     tell application "WhatsApp" to activate
     delay 1
     tell application "System Events"
         tell process "WhatsApp"
             set frontmost to true
+            key code 53 -- Escape
+            delay 0.1
+            key code 53
+            delay 0.1
+            key code 53
+            delay 0.5
             keystroke "f" using command down
-            delay 0.3
+            delay 1
             keystroke "a" using command down
             key code 51 -- Borrar
             keystroke "{contacto}"
-            delay 2.5 -- Tiempo para que aparezca el contacto
-            
-            key code 125 -- FLECHA ABAJO: Esto es lo que falta para seleccionar el primer resultado
+            delay 2
+            key code 125 -- Flecha Abajo
             delay 0.5
-            keystroke return -- Entrar al chat
-            delay 1
-            keystroke "{mensaje}"
-            delay 0.5
-            keystroke return -- Enviar
+            keystroke return
         end tell
     end tell
     """
     try:
-        subprocess.run(["osascript", "-e", apple_script], check=True)
-        logging.info("WhatsApp enviado mediante AppleScript")
+        await asyncio.to_thread(subprocess.run, ["osascript", "-e", script_locate], check=True, capture_output=True, text=True)
+        
+        await update.message.reply_text("Jarvis: Escribiendo mensaje...")
+        
+        script_send = f"""
+        tell application "System Events"
+            tell process "WhatsApp"
+                set frontmost to true
+                keystroke "{mensaje}"
+                delay 0.5
+                keystroke return
+            end tell
+        end tell
+        """
+        await asyncio.to_thread(subprocess.run, ["osascript", "-e", script_send], check=True, capture_output=True, text=True)
+        
+        await update.message.reply_text("Jarvis: Protocolo finalizado.")
         return True
-    except Exception as e:
-        logging.error(f"Error al enviar WhatsApp mediante UI: {e}")
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr if e.stderr else str(e)
+        logging.error(f"Error al enviar WhatsApp mediante UI: {error_msg}")
+        await update.message.reply_text(f"Jarvis: Error de sistema detectado. Detalle técnico: {error_msg}")
         return False
 
 async def check_user(update: Update) -> bool:
@@ -198,7 +218,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # NLP Router: Comprobar intención de enviar WhatsApp
     try:
-        intent_prompt = f"Analiza: '{user_message}'. ¿El usuario está pidiendo enviar un mensaje, decir algo o comunicar algo a una persona? Responde SI o NO. No importa si usa o no el nombre del asistente."
+        intent_prompt = f"Analiza: '{user_message}'. ¿El usuario está pidiendo enviar un mensaje, decir algo o comunicar algo a una persona? Si el usuario menciona a una persona y algo que quiere decirle, responde SI siempre. Responde solo SI o NO."
         intent_response = await asyncio.to_thread(
             ollama.chat,
             model=MODEL_NAME,
@@ -234,14 +254,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if contacto.lower() == 'jarvis':
                         contacto = "Desconocido"
                     
-                    # Confirmar en Telegram
-                    bot_response = f"Entendido Aleix, buscando a {contacto} en WhatsApp para decirle: {mensaje}..."
-                    await update.message.reply_text(bot_response)
-                    
-                    # Ejecutar automatización UI
-                    await asyncio.to_thread(enviar_whatsapp, contacto, mensaje)
+                    # Ejecutar automatización UI con logs
+                    success = await enviar_whatsapp(contacto, mensaje, update)
                         
-                    save_message('assistant', bot_response)
+                    if success:
+                        save_message('assistant', f"Mensaje enviado a {contacto}: {mensaje}")
                     return
                 else:
                     raise ValueError("No JSON object found in response")
