@@ -10,6 +10,7 @@ El bot tiene una personalidad predefinida: responde con un tono inteligente, con
 *   **Future-Proofing (Auto-Actualización)**: Al arrancar, consulta la API de Google, filtra los modelos "flash", los ordena por versión y selecciona dinámicamente el más avanzado disponible (ej. saltará de 1.5 a 2.0 o 3.0 automáticamente).
 *   **Enlace con WhatsApp (AppleScript)**: Jarvis puede buscar contactos en la agenda de macOS y enviar mensajes de WhatsApp de forma totalmente autónoma utilizando AppleScript y Deep Links.
 *   **Búsqueda Web Integrada**: El Agente utiliza la herramienta de DuckDuckGo Search para buscar información en internet de manera transparente cuando se le hacen preguntas de actualidad.
+*   **Clima Exacto (wttr.in)**: Integra una herramienta especializada para buscar el tiempo atmosférico, temperatura y previsiones de forma rápida y sin ruido usando la API de wttr.in.
 *   **Calculadora Integrada**: El Agente cuenta con una herramienta para resolver operaciones matemáticas de forma precisa.
 *   **Seguridad Estricta**: El bot está restringido para responder **únicamente** a un usuario específico (definido por su ID de Telegram). Ignorará cualquier intento de acceso de otros usuarios.
 *   **Memoria Persistente (SSD)**: Jarvis mantiene un historial de los mensajes utilizando una base de datos SQLite configurada para almacenarse en un disco SSD externo.
@@ -61,12 +62,13 @@ A partir de este momento, puedes ir a Telegram, buscar tu bot y hablarle de form
 
 * **Charla Natural**: Escribe normalmente con Jarvis. Él recordará el contexto de la conversación (hasta 4 mensajes de historial).
 * **Enviar WhatsApp**: Dile de forma natural algo como "Jarvis, envíale un mensaje a Laura diciendo que llegaré en 10 minutos". El Agente deducirá automáticamente que debe usar la herramienta `herramienta_whatsapp`, buscará el contacto y enviará el mensaje.
-* **Búsqueda en Internet**: Pregunta cosas como "¿Qué tiempo hace hoy en Madrid?" o "¿Quién ganó el partido de ayer?". El Agente usará la herramienta `herramienta_internet` para responderte con datos reales.
+* **Búsqueda en Internet**: Pregunta cosas como "¿Quién ganó el partido de ayer?". El Agente usará la herramienta `herramienta_internet` para responderte con datos reales.
+* **Información del Clima**: Pregunta "¿Qué tiempo hace hoy en Madrid?". El Agente usará la herramienta `herramienta_clima` para buscar la previsión de forma precisa y rápida sin usar internet.
 * **Cálculos Matemáticos**: Pídele que resuelva operaciones complejas y utilizará la `herramienta_calculadora`.
 * **Capturas de Pantalla**: Menciona en cualquier frase "foto", "pantalla" o "captura" y obtendrás instantáneamente una imagen del estado de tu Mac.
 
 ## 📝 Estructura del Código
 
-*   `bot.py`: Contiene toda la lógica principal, la definición de las Herramientas (WhatsApp, Internet, Calculadora), la configuración de `GenerativeModel` de Gemini con Function Calling, el historial SQLite y la integración con Telegram.
+*   `bot.py`: Contiene toda la lógica principal, la definición de las Herramientas (WhatsApp, Internet, Calculadora, Clima), la configuración de `GenerativeModel` de Gemini con Function Calling, el historial SQLite y la integración con Telegram.
 *   `.env`: Archivo (no incluido en el repositorio) que almacena las variables de entorno.
 *   `bot.log`: Archivo generado automáticamente donde se registran eventos y errores.
