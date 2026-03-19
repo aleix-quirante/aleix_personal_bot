@@ -6,7 +6,8 @@ El bot tiene una personalidad predefinida: responde con un tono inteligente, con
 
 ## ✨ Características Principales
 
-*   **Arquitectura de Agentes (Function Calling)**: Utiliza el modelo `gemini-1.5-flash`, el cual decide de forma autónoma cuándo chatear, cuándo buscar en internet, cuándo calcular o cuándo ejecutar automatizaciones en el Mac, sin depender de prompts frágiles de "intent parsing".
+*   **Arquitectura de Agentes (Function Calling)**: Utiliza un sistema de auto-descubrimiento para usar siempre el modelo `gemini-flash` más reciente. El Agente decide de forma autónoma cuándo chatear, cuándo buscar en internet, cuándo calcular o cuándo ejecutar automatizaciones en el Mac, sin depender de prompts frágiles de "intent parsing".
+*   **Future-Proofing (Auto-Actualización)**: Al arrancar, consulta la API de Google, filtra los modelos "flash", los ordena por versión y selecciona dinámicamente el más avanzado disponible (ej. saltará de 1.5 a 2.0 o 3.0 automáticamente).
 *   **Enlace con WhatsApp (AppleScript)**: Jarvis puede buscar contactos en la agenda de macOS y enviar mensajes de WhatsApp de forma totalmente autónoma utilizando AppleScript y Deep Links.
 *   **Búsqueda Web Integrada**: El Agente utiliza la herramienta de DuckDuckGo Search para buscar información en internet de manera transparente cuando se le hacen preguntas de actualidad.
 *   **Calculadora Integrada**: El Agente cuenta con una herramienta para resolver operaciones matemáticas de forma precisa.
