@@ -6,6 +6,7 @@ import json
 import sqlite3
 import subprocess
 import urllib.parse
+import requests
 from datetime import datetime
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -173,6 +174,23 @@ def herramienta_calculadora(operacion: str) -> str:
         return "Error en el cálculo."
 
 
+def herramienta_clima(ciudad: str) -> str:
+    """
+    Usa esta herramienta EXCLUSIVAMENTE para saber el tiempo meteorológico, temperatura o pronóstico de una ciudad.
+    Argumentos:
+    - ciudad: El nombre de la ciudad (ej. 'Sabadell', 'Madrid').
+    """
+    try:
+        # wttr.in devuelve el tiempo en formato texto plano rápido y gratis
+        url = f"https://wttr.in/{ciudad}?format=4&M"
+        respuesta = requests.get(url, timeout=5)
+        if respuesta.status_code == 200:
+            return f"El tiempo actual en {ciudad} es: {respuesta.text}"
+        return "No pude obtener los datos meteorológicos del servidor."
+    except Exception as e:
+        return f"Error de conexión al buscar el clima: {str(e)}"
+
+
 # Inicializamos el modelo de Gemini con las instrucciones de sistema
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -214,7 +232,12 @@ def obtener_ultimo_modelo_flash():
 # Inicializamos el modelo de Gemini usando auto-descubrimiento
 jarvis_model = genai.GenerativeModel(
     model_name=obtener_ultimo_modelo_flash(),
-    tools=[herramienta_whatsapp, herramienta_internet, herramienta_calculadora],
+    tools=[
+        herramienta_whatsapp,
+        herramienta_internet,
+        herramienta_calculadora,
+        herramienta_clima,
+    ],
     system_instruction="""Eres Jarvis, el asistente de inteligencia artificial personal de Aleix. 
     REGLAS ESTRICTAS DE PERSONALIDAD:
     1. Habla SIEMPRE de forma natural, conversacional y directa (estilo Iron Man).
