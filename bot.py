@@ -111,7 +111,7 @@ def buscar_contacto_mac(nombre_buscar):
         return None
 
 
-def herramienta_whatsapp(contacto: str, mensaje: str) -> str:
+def send_whatsapp(contacto: str, mensaje: str) -> str:
     """
     Usa esta herramienta EXCLUSIVAMENTE cuando el usuario te pida enviar un mensaje a alguien por WhatsApp o Telegram.
     Argumentos:
@@ -144,7 +144,7 @@ def herramienta_whatsapp(contacto: str, mensaje: str) -> str:
         return f"Error al enviar: {str(e)}"
 
 
-def herramienta_internet(consulta: str) -> str:
+def web_search(consulta: str) -> str:
     """
     Usa esta herramienta para buscar información en internet (el clima, noticias actuales, datos que no sepas).
     Argumentos:
@@ -160,7 +160,7 @@ def herramienta_internet(consulta: str) -> str:
         return f"Error buscando en internet: {str(e)}"
 
 
-def herramienta_calculadora(operacion: str) -> str:
+def calculator(operacion: str) -> str:
     """
     Usa esta herramienta para resolver operaciones matemáticas complejas.
     Argumentos:
@@ -174,18 +174,18 @@ def herramienta_calculadora(operacion: str) -> str:
         return "Error en el cálculo."
 
 
-def herramienta_clima(ciudad: str) -> str:
+def get_weather(city: str) -> str:
     """
     Usa esta herramienta EXCLUSIVAMENTE para saber el tiempo meteorológico, temperatura o pronóstico de una ciudad.
     Argumentos:
-    - ciudad: El nombre de la ciudad (ej. 'Sabadell', 'Madrid').
+    - city: El nombre de la ciudad (ej. 'Sabadell', 'Madrid').
     """
     try:
         # wttr.in devuelve el tiempo en formato texto plano rápido y gratis
-        url = f"https://wttr.in/{ciudad}?format=4&M"
+        url = f"https://wttr.in/{city}?format=4&M"
         respuesta = requests.get(url, timeout=5)
         if respuesta.status_code == 200:
-            return f"El tiempo actual en {ciudad} es: {respuesta.text}"
+            return f"El tiempo actual en {city} es: {respuesta.text}"
         return "No pude obtener los datos meteorológicos del servidor."
     except Exception as e:
         return f"Error de conexión al buscar el clima: {str(e)}"
@@ -233,10 +233,10 @@ def obtener_ultimo_modelo_flash():
 jarvis_model = genai.GenerativeModel(
     model_name=obtener_ultimo_modelo_flash(),
     tools=[
-        herramienta_whatsapp,
-        herramienta_internet,
-        herramienta_calculadora,
-        herramienta_clima,
+        send_whatsapp,
+        web_search,
+        calculator,
+        get_weather,
     ],
     system_instruction="""Eres Jarvis, el asistente de inteligencia artificial personal de Aleix. 
     REGLAS ESTRICTAS DE PERSONALIDAD:
