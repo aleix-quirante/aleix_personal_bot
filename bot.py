@@ -114,7 +114,7 @@ def search_mac_contact(search_name):
         return None
 
 
-def send_whatsapp(contact: str, message: str) -> str:
+async def send_whatsapp(contact: str, message: str) -> str:
     """
     Usa esta herramienta EXCLUSIVAMENTE cuando el usuario te pida enviar un mensaje a alguien por WhatsApp o Telegram.
     Argumentos:
@@ -130,16 +130,20 @@ def send_whatsapp(contact: str, message: str) -> str:
         # 2. AppleScript y URL Deep Link
         url_text = urllib.parse.quote(message)
         url_whatsapp = f"whatsapp://send?phone={number}&text={url_text}"
-        subprocess.run(["open", url_whatsapp], check=True)
 
-        import time
+        try:
+            subprocess.run(["open", url_whatsapp], check=True)
+        except Exception as e:
+            return f"Error: No se pudo abrir la aplicación de WhatsApp. Verifica que está instalada."
 
-        time.sleep(3.5)  # Pausa sincrona
+        await asyncio.sleep(4)  # Esperar a que la app abra sin bloquear el bot
 
         script_enter = """
         tell application "WhatsApp" to activate
-        delay 0.8
-        tell application "System Events" to key code 36
+        delay 1.0
+        tell application "System Events"
+            keystroke return
+        end tell
         """
         subprocess.run(["osascript", "-e", script_enter], check=True)
         return f"Éxito: Mensaje enviado a {contact}."
