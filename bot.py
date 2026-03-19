@@ -31,6 +31,16 @@ logging.basicConfig(level=logging.INFO, filename="bot.log")
 
 
 # --- MEMORIA ---
+def inicializar_memoria():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, role TEXT, content TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)"
+    )
+    conn.commit()
+    conn.close()
+
+
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -273,6 +283,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == "__main__":
+    inicializar_memoria()
     init_db()
     print("🚀 Jarvis en línea. Mac Mini M4 bajo control.")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
