@@ -20,6 +20,7 @@ from telegram.ext import (
     ContextTypes,
 )
 from duckduckgo_search import DDGS
+import pyautogui
 
 load_dotenv()
 
@@ -140,29 +141,12 @@ async def send_whatsapp(contact: str, message: str) -> str:
 
         print(f"DEBUG: Intentando enviar mensaje a {number}...")
 
-        # Nuevo AppleScript mejorado para 2026
-        script_send = """
-        tell application "WhatsApp" to activate
-        delay 2
-        tell application "System Events"
-            tell process "WhatsApp"
-                set frontmost to true
-                -- Intento 1: Pulsar Enter de forma nativa
-                keystroke return
-                delay 1
-                -- Intento 2: Buscar el botón "Enviar" y hacer click físico
-                try
-                    click (first button whose description is "Enviar")
-                end try
-                try
-                    click (first button whose description is "Send")
-                end try
-            end tell
-        end tell
-        """
-        await asyncio.to_thread(
-            subprocess.run, ["osascript", "-e", script_send], check=True
+        # Inyección a nivel de hardware
+        logging.info(
+            "Iniciando toma de control de teclado (Nate Gentile protocol) para pulsar Enter..."
         )
+        pyautogui.press("enter")
+
         return f"Éxito: Mensaje enviado a {contact}."
     except Exception as e:
         return f"Error al enviar: {str(e)}"
