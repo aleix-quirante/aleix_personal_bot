@@ -138,14 +138,15 @@ async def send_whatsapp(contact: str, message: str) -> str:
 
         await asyncio.sleep(4)  # Esperar a que la app abra sin bloquear el bot
 
-        script_enter = """
+        # Nuevo script de envío dentro de send_whatsapp
+        script_send = """
         tell application "WhatsApp" to activate
-        delay 1.0
+        delay 1.5 -- Tiempo extra para asegurar que la ventana está al frente
         tell application "System Events"
-            keystroke return
+            keystroke return -- Envía la señal de pulsar la tecla 'Enter'
         end tell
         """
-        subprocess.run(["osascript", "-e", script_enter], check=True)
+        subprocess.run(["osascript", "-e", script_send], check=True)
         return f"Éxito: Mensaje enviado a {contact}."
     except Exception as e:
         return f"Error al enviar: {str(e)}"
