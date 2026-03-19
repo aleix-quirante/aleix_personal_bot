@@ -72,6 +72,7 @@ def search_mac_contact(search_name):
         return None
 
     logging.info(f"Buscando en Contactos de macOS: {search_name}")
+    print(f"🔍 [AGENTE] Intentando buscar en AppleScript: {search_name}")
     # Nota sobre permisos: Asegúrate de que la Terminal/VSCode/Python tengan permisos
     # en Ajustes del Sistema -> Privacidad y Seguridad -> Contactos
 
@@ -261,7 +262,8 @@ jarvis_model = genai.GenerativeModel(
     1. Habla SIEMPRE de forma natural, conversacional y directa (estilo Iron Man).
     2. TIENES TOTALMENTE PROHIBIDO usar prefijos robóticos. NUNCA empieces tus frases con "Acción completada:", "Resultado:", "Jarvis:", "Sistema:", o "Mensaje:".
     3. Cuando uses una herramienta (como enviar un WhatsApp o buscar en internet), simplemente dile a Aleix lo que has hecho o lo que has encontrado, integrándolo en tu respuesta como un humano.
-    4. Sé conciso y educado.""",
+    4. Sé conciso y educado.
+    5. NUNCA intentes usar web_search para buscar números de teléfono de personas. Los números de teléfono solo pueden obtenerse a través de la agenda local del Mac.""",
 )
 
 
