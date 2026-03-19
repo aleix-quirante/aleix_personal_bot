@@ -136,19 +136,27 @@ async def send_whatsapp(contact: str, message: str) -> str:
         except Exception as e:
             return f"Error: No se pudo abrir la aplicación de WhatsApp. Verifica que está instalada."
 
-        await asyncio.sleep(4)  # Esperar a que la app abra sin bloquear el bot
+        await asyncio.sleep(5)  # Esperar a que la app abra sin bloquear el bot
+
+        print(f"DEBUG: Intentando enviar mensaje a {number}...")
 
         # Nuevo AppleScript mejorado para 2026
-        script_send = f"""
+        script_send = """
         tell application "WhatsApp" to activate
-        delay 2 -- Tiempo para que el M4 procese la ventana al frente
+        delay 2
         tell application "System Events"
             tell process "WhatsApp"
                 set frontmost to true
-                -- Intenta pulsar Enter dos veces por si el primer toque solo enfoca el cuadro
-                key code 36 
-                delay 0.5
-                key code 36
+                -- Intento 1: Pulsar Enter de forma nativa
+                keystroke return
+                delay 1
+                -- Intento 2: Buscar el botón "Enviar" y hacer click físico
+                try
+                    click (first button whose description is "Enviar")
+                end try
+                try
+                    click (first button whose description is "Send")
+                end try
             end tell
         end tell
         """
