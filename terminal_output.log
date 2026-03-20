@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/Users/v2estudio/aleix_jarvis/bot.py", line 5, in <module>
-    import ollama
-ModuleNotFoundError: No module named 'ollama'
